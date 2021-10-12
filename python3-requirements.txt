@@ -1,0 +1,6 @@
+PyYAML
+paho-mqtt
+gevent
+requests
+kubernetes
+jsonpath-ng

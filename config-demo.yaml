@@ -1,0 +1,29 @@
+mqtt:
+  host: 10.0.0.5
+  port: 1883
+  client-id: mqtt-kube
+  topic-prefix: dev/mqtt-kube
+
+http:
+  host: 0.0.0.0
+  port: 8080
+  max-connections: 10
+
+bindings:
+  - namespace: media
+    resource: deployment
+    name: jellyfin
+    patch:
+      topic: jellyfin/power/set
+      values:
+        ON: 1
+        OFF: 0
+      jsonpath: "spec.replicas"
+    watch:
+      jsonpath: "status.available_replicas"
+      values:
+        1: ON
+        ~: OFF
+      topic: jellyfin/power/state
+      retain: true
+      qos: 1
