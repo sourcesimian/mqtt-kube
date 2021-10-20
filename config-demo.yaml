@@ -11,7 +11,7 @@ http:
 
 bindings:
   - namespace: media
-    resource: deployment
+    resource: Deployment
     name: jellyfin
     patch:
       topic: jellyfin/power/set
@@ -20,10 +20,51 @@ bindings:
         OFF: 0
       jsonpath: "spec.replicas"
     watch:
-      jsonpath: "status.available_replicas"
+      jsonpath: "status.availableReplicas"
       values:
         1: ON
         ~: OFF
       topic: jellyfin/power/state
       retain: true
       qos: 1
+
+  - namespace: iot
+    resource: DaemonSet
+    name: mqtt-ids
+    patch:
+      topic: mqtt-ids/power/set
+      values:
+        ON: rpi1
+        OFF: no-node
+      jsonpath: "spec.template.spec.nodeName"
+    watch:
+      jsonpath: "status.numberAvailable"
+      values:
+        1: ON
+        ~: OFF
+      topic: mqtt-ids/power/state
+      retain: true
+      qos: 1
+
+  - namespace: dev
+    job:
+      spec:
+        template:
+          spec:
+            containers:
+              image: alpine
+              command:
+              - wget
+              - http://10.0.0.5/foo
+              resources:
+                requests:
+                  memory: "32Mi"
+                  cpu: "10m"
+                limits:
+                  memory: "32Mi"
+                  cpu: "10m"
+    trigger:
+      topic: webhook/cmd
+      values:
+        ON: on
+        OFF: off

@@ -5,6 +5,7 @@ import gevent
 from contextlib import contextmanager
 
 import mqtt_kube.k8s.jsonpathadaptor
+import mqtt_kube.k8s.text
 
 import kubernetes
 import kubernetes.config
@@ -13,13 +14,18 @@ import kubernetes.stream
 import kubernetes.watch
 
 
-class Deployment(object):
-    def __init__(self, api_client, namespace):
+class Workload(object):
+    def __init__(self, api_client, namespace, resource):
         self._api_client = api_client
+        self._resource = resource
+        assert resource in ('deployment', 'daemon_set')
         self._namespace = namespace
         self._o = None
         self._watch_greenlet = None
         self._on_change = None
+
+    def _api_op(self, api, op):
+        return getattr(api, '%s_%s' % (op, self._resource))
 
     @contextmanager
     def patch(self, name):
@@ -27,16 +33,20 @@ class Deployment(object):
 
         # if not self._watch_greenlet or not self._o:
         #     print('## get latest', name)
-        self._o = api.read_namespaced_deployment(name=name, namespace=self._namespace)
+        try:
+            self._o = self._api_op(api, 'read_namespaced')(name=name, namespace=self._namespace)
+        except kubernetes.client.exceptions.ApiException as ex:
+            logging.error('{%s:%s} Fetching object failed for "%s": %s: %s', self._namespace, self._resource, name, ex.__class__.__name__, ex)
+            return
 
         yield self._o
 
-        logging.debug('{%s} Patching "%s" ...', name, self._namespace)
+        logging.debug('{%s:%s} Patching "%s" ...', self._namespace, self._resource, name)
 
         try:
-            self._o = api.patch_namespaced_deployment(name=name, namespace=self._namespace, body=self._o)
+            self._o = self._api_op(api, 'patch_namespaced')(name=name, namespace=self._namespace, body=self._o)
         except kubernetes.client.exceptions.ApiException as ex:
-            logging.error('{%s} Patch failed for "%s": %s: %s', self._namespace, name, ex.__class__.__name__, ex)
+            logging.error('{%s:%s} Patch failed for "%s": %s: %s', self._namespace, self._resource, name, ex.__class__.__name__, ex)
 
     def watch(self, on_change):
         if not self._watch_greenlet:
@@ -53,21 +63,21 @@ class Deployment(object):
             try:
                 self._watch()
             except kubernetes.client.exceptions.ApiException as ex:
-                logging.warning('{%s} Watch failed: %s: %s', self._namespace, ex.__class__.__name__, ex)
+                logging.warning('{%s:%s} Watch failed: %s: %s', self._namespace, self._resource, ex.__class__.__name__, ex)
                 if ex.reason.startswith('Expired: too old resource version'):
                     pass
                 self._o = None
             except:
-                logging.exception('{%s} Watch failed', self._namespace, )
+                logging.exception('{%s:%s} Watch failed', self._namespace, self._resource, )
             time.sleep(30)
 
     def _watch(self):
         api = kubernetes.client.AppsV1Api(self._api_client)
         w = kubernetes.watch.Watch()
 
-        logging.debug('{%s} Watching ...', self._namespace)
+        logging.debug('{%s:%s} Watching ...', self._namespace, self._resource)
         for item in  w.stream(
-            api.list_namespaced_deployment,
+            self._api_op(api, 'list_namespaced'),
             namespace=self._namespace,
             limit=1,
             resource_version=self._resource_version,
@@ -77,17 +87,16 @@ class Deployment(object):
             watch_type = item['type']
 
             if watch_type == 'ERROR':
-                logging.error('{%s} Watch ERROR: %s %s (%s): %s', self._namespace, item['raw_object']['status'], item['raw_object']['reason'], item['raw_object']['code'], item['raw_object']['message'])
+                logging.error('{%s:%s} Watch ERROR: %s %s (%s): %s', self._namespace, self._resource, item['raw_object']['status'], item['raw_object']['reason'], item['raw_object']['code'], item['raw_object']['message'])
                 self._o = None
                 return
-
-            if watch_type in ('ADDED', 'MODIFIED'):
+            elif watch_type in ('ADDED', 'MODIFIED'):
                 obj = item['object']
                 self._o = obj
-                # logging.debug('{%s} Watch %s %s %s', self._namespace, watch_type, self._o.metadata.name, self._o.metadata.resource_version)
+                logging.debug('{%s:%s} Watch %s %s %s', self._namespace, self._resource, watch_type, self._o.metadata.name, self._o.metadata.resource_version)
                 self._on_change(obj)
             else:
-                logging.info('{%s} Watch %s Unhandled', self._namespace, watch_type)
+                logging.info('{%s:%s} Watch %s Unhandled', self._namespace, self._resource, watch_type)
 
     @property
     def _resource_version(self):

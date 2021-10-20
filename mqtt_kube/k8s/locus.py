@@ -1,32 +1,36 @@
 import logging
+import re
 
 from datetime import datetime, timedelta
 
 import jsonpath_ng
 
-import mqtt_kube.k8s.deploy
+import mqtt_kube.k8s.text
+import mqtt_kube.k8s.workload
 
 
 class Locus(object):
-    def __init__(self, api_listener, resource, namespace, name, jsonpath):
+    def __init__(self, api_listener, namespace, resource, name, jsonpath):
         self._api_listener = api_listener
-        self._resource = resource
         self._namespace = namespace
+        self._resource = resource
         self._name = name
 
         self._id = self._object_id(namespace, resource, name)
         self._last_watch_value = None
         self._last_watch = None
         
+        jsonpath = mqtt_kube.k8s.text.camel_to_snake(jsonpath)
         self._jsonpath = jsonpath_ng.parse(jsonpath)
         self._on_change = None
 
-    @staticmethod
-    def _object_id(namespace, resource, name):
-        return f'{namespace}:{resource.lower()}/{name}'
+    @classmethod
+    def _object_id(cls, namespace, resource, name):
+        resource = mqtt_kube.k8s.text.camel_to_snake(resource)
+        return f'{namespace}:{resource}/{name}'
 
     def write(self, value):
-        with self._api_listener.patch(self._resource, self._namespace, self._name) as obj:
+        with self._api_listener.patch(self._namespace, self._resource, self._name) as obj:
             self._jsonpath.update(mqtt_kube.k8s.jsonpathadaptor.JsonPathAdaptor(obj), value)
 
             values = self._jsonpath.find(mqtt_kube.k8s.jsonpathadaptor.JsonPathAdaptor(obj))
@@ -38,12 +42,11 @@ class Locus(object):
                     logging.warning('Not set %s::%s: %s != %s', self._id, self._jsonpath, value, final_value)
             else:
                 logging.warning('Value not at %s::%s %s', self._id, self._jsonpath, value)
-                logging.debug('obj.spec.replicas: %s', obj.spec.replicas)
 
     def watch(self, on_change):
         self._on_change = on_change
         logging.debug('Watch %s::%s', self._id, self._jsonpath)
-        self._api_listener.watch(self._resource, self._namespace, self._name, self._on_watch)
+        self._api_listener.watch(self._namespace, self._resource, self._name, self._on_watch)
     
     def _notify_watch_change(self, payload):
         now = datetime.now()

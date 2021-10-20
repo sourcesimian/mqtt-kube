@@ -16,8 +16,8 @@ class Binding(object):
             try:
                 patch = binding.get('patch', None)
                 if patch:
-                    locus = mqtt_kube.k8s.locus.Locus(self._api_listener, binding['resource'],
-                                                      binding['namespace'], binding['name'],
+                    locus = mqtt_kube.k8s.locus.Locus(self._api_listener, binding['namespace'],
+                                                      binding['resource'], binding['name'],
                                                       patch['jsonpath'])
 
                     values = ValueMap(patch.get('values', None))
@@ -28,8 +28,8 @@ class Binding(object):
 
                 watch = binding.get('watch', None)
                 if watch:
-                    locus = mqtt_kube.k8s.locus.Locus(self._api_listener, binding['resource'],
-                                                      binding['namespace'], binding['name'],
+                    locus = mqtt_kube.k8s.locus.Locus(self._api_listener, binding['namespace'],
+                                                      binding['resource'], binding['name'],
                                                       watch['jsonpath'])
                     values = ValueMap(watch.get('values', None))
                     watcher = Watcher(locus,

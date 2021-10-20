@@ -21,8 +21,6 @@ COPY mqtt-kube/setup.py /
 COPY mqtt-kube/mqtt_kube /mqtt_kube
 RUN python3 /setup.py develop
 
-COPY mqtt-kube/resources/* /resources/
-
 COPY my-config.yaml /config.yaml
 
 ENTRYPOINT ["/usr/local/bin/mqtt-kube", "/config.yaml"]
