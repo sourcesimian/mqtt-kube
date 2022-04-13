@@ -4,3 +4,4 @@ gevent
 requests
 kubernetes
 jsonpath-ng
+Mako

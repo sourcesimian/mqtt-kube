@@ -1,9 +1,7 @@
-import logging
-
 DEFAULT = object()
 
 
-class JsonPathAdaptor(object):
+class JsonPathAdaptor:
     def __init__(self, obj):
         self._o = obj
 

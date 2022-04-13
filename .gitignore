@@ -2,3 +2,4 @@
 *.egg-info/
 virtualenv/
 .vscode/
+reports/

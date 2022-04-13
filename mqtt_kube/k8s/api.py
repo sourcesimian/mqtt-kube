@@ -12,7 +12,11 @@ def get_client_api(kubeconfig=None):
     if kubeconfig:
         kubernetes.config.load_kube_config(kubeconfig, client_configuration=config)
     else:
-        kubernetes.config.load_incluster_config(client_configuration=config)
+        try:
+            kubernetes.config.load_incluster_config(client_configuration=config)
+        except Exception as ex:  # pylint: disable=W0703
+            logging.error('Unable to load Kubernetes API configuration, %s "%s"', ex.__class__.__name__, ex)
+            return None
 
     config.verify_ssl = False
     # config.ssl_ca_cert = ...

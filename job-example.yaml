@@ -1,0 +1,26 @@
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: ${binding.name} #-${uid}
+spec:
+  activeDeadlineSeconds: 60
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+      - name: ${binding.name}
+        image: alpine
+        command:
+        - wget
+        - -O
+        - /dev/stdout
+        - http://www.example.com
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "10m"
+          limits:
+            memory: "32Mi"
+            cpu: "10m"
+      restartPolicy: Never

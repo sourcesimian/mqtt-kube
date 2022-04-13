@@ -1,0 +1,77 @@
+mqtt:
+  host: broker.emqx.io
+  port: 1883
+  client-id: mqtt-kube-demo
+  topic-prefix: sourcesimian/mqtt-kube/demo
+
+http:
+  host: 0.0.0.0
+  port: 8080
+  max-connections: 10
+
+logging:
+  level: DEBUG
+
+bindings:
+  - namespace: mqtt-kube-demo
+    resource: Deployment
+    name: jellyfin
+
+    patch:
+    - topic: jellyfin/power/set
+      locus: "$.spec.replicas"
+      values:
+        map:
+          "ON": 1
+          "OFF": 0
+
+    watch:
+    - locus: "$.status.availableReplicas"
+      topic: jellyfin/power/state
+      retain: true
+      qos: 1
+      values:
+        map:
+          1: "ON"
+          ~: "OFF"
+
+  - namespace: mqtt-kube-demo
+    resource: Job
+    name: example-wget
+
+    watch:
+    - locus: "$.status"
+      topic: example/status
+
+    - locus: "$.status.failed"
+      topic: example/status/failed
+      values:
+        map:
+          ~: ~
+          "lambda v: v > 0": "FAILED"
+
+    - locus: "$.status.active"
+      topic: example/status/active
+      values:
+        map:
+          ~: ~
+          1: "ACTIVE"
+
+    - locus: "$.status.succeeded"
+      topic: example/status/succeeded
+      values:
+        map:
+          ~: ~
+          1: "DONE"
+
+    - locus: "$.status.startTime"
+      topic: example/status/startTime
+
+    action:
+    - topic: example/cmd        # e.g. topic: sourcesimian/mqtt-kube/demo/example/cmd
+      launch: !relpath job-example.yaml
+      values:
+        jsonpath: "$.action"
+        map:
+          "RUN": "launch"   # e.g. payload: {"action": "RUN"}
+          "STOP": "delete"  # e.g. payload: {"action": "STOP"}
