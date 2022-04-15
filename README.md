@@ -24,6 +24,9 @@ This capability presents many possible use cases. An example is to switch a medi
       - [Action](#action)
         - [Action Templates](#action-templates)
     - [Value Mapping](#value-mapping)
+- [Examples](#examples)
+  - [Deployment as an On/Off Appliance](#deployment-as-an-onoff-appliance)
+  - [Launch/delete a Job](#launchdelete-a-job)
 - [Contribution](#contribution)
   - [Development](#development)
 - [License](#license)
@@ -284,6 +287,63 @@ The values map `<input>` expressions can take on the following forms:
 | Regular Expressions | When the input expression is prefixed with `re:` then the remainder of the string is used as a regular expression match. If groups are specified they will be available by name in the [Format String](#format-string) context. |
 | Lambda Expression | When the input expression is prefixed with `lambda ` then this will be used as a unary match function. |
 | Format String | When the output expression contains Python [f-string](https://docs.python.org/3/reference/lexical_analysis.html#f-strings) replacement fields it will be rendered using the context from the matching process. |
+
+# Examples
+## Deployment as an On/Off Appliance
+An existing deployment of a media server (in this case Jellyfin) can be controlled as though it were an appliance by mapping `status.availableReplicas` and `spec.replicas` to and from topics, as follows:
+
+```
+  - namespace: media
+    resource: Deployment
+    name: jellyfin
+
+    patch:
+    - topic: jellyfin/power/set
+      locus: "spec.replicas"
+      values:
+        map:
+          "ON": 1
+          "OFF": 0
+
+    watch:
+    - locus: "status.availableReplicas"
+      topic: jellyfin/power/state
+      retain: true
+      qos: 1
+      values:
+        map:
+          1: "ON"
+          ~: "OFF"
+```
+The above would translate into the following MQTT topics:
+* `jellyfin/power/set` that accepts values of `ON` or `OFF`,
+* `jellyfin/power/state` that publishes values of `ON` or `OFF`.
+
+## Launch/delete a Job
+A Job or other workload can be launched or deleted, as follows:
+```
+  - namespace: sync
+    resource: Job
+    name: syncer
+
+    action:
+    - topic: syncer/cmd
+      launch: !relpath syncer-job.yaml
+      values:
+        map:
+          "RUN": "launch"
+          "STOP": "delete"
+
+    watch:
+    - locus: "$.status"
+      topic: syncer/status
+```
+The above would translate into the following MQTT topics:
+* `syncer/cmd` that accepts values of `RUN` or `STOP`,
+* `syncer/status` that publishes the Job status.
+
+Additional watches can be added to provide more targeted status, e.g. see [config-basic.yaml](./config-basic.yaml)
+
 
 # Contribution
 Yes sure! And please. I built **mqtt-kube** as a building block in my MQTT centric home automation. I want it to be a project that is quick and easy to use and makes DIY home automation more fun and interesting.
