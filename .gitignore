@@ -3,3 +3,4 @@
 virtualenv/
 .vscode/
 reports/
+.direnv/
